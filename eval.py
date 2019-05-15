@@ -19,8 +19,9 @@ from M4Driver import M4Driver
 # --------------------------------------------------------------------------------------------------
 #                                             settings
 # --------------------------------------------------------------------------------------------------
-serDev = '/dev/ttyUSB1'
+serDev = '/dev/ttyUSB0'
 modelPath = 'models/modelLar/model.keras'
+nrOfTestSamples = 500
 
 # --------------------------------------------------------------------------------------------------
 #                           load data, scale into float and reshape as vector
@@ -34,7 +35,7 @@ x_test = x_test.reshape(x_test.shape[0], 28*28)
 #                                        load and evaluate model
 # --------------------------------------------------------------------------------------------------
 cModel = k.models.load_model(modelPath)
-accHost = cModel.evaluate(x_test, y_test, verbose=0)
+accH = cModel.evaluate(x_test, y_test, verbose=0)
 
 # --------------------------------------------------------------------------------------------------
 #                                open serial connection to the M4 board
@@ -45,19 +46,21 @@ m4d.openSerial(serDev)
 # --------------------------------------------------------------------------------------------------
 #                                 get the predictions from the board
 # --------------------------------------------------------------------------------------------------
-print('Comparing ' + str(x_test_int.shape[0]) + ' MNIST predictions, this takes a while')
+print('Comparing ' + str(nrOfTestSamples) + ' MNIST predictions, this takes a while')
 wrongPred = 0
-for i in range(0, x_test_int.shape[0]):
+for i in range(0, nrOfTestSamples):
     cPred = m4d.predict(x_test_int[i].reshape(1, 28*28))
     cPred = struct.unpack('1B', cPred)[0]
-    print(cPred, y_test[i])
+    print('Prediction target:'+ str(cPred) + ' Label:' + str(y_test[i]))
     if cPred != y_test[i]:
         wrongPred = wrongPred + 1
 
 # --------------------------------------------------------------------------------------------------
 #                                     calculate the accuracy
 # --------------------------------------------------------------------------------------------------
-accM4 = str(100 - (wrongPred / x_test.shape[0]) * 100)
-accHost = str(accHost[1] * 100)
-print('Compared model:' + modelPath)
-print('Accuracy host:' + accHost +'%\n' + 'Accuracy target:' + accM4 + '%')
+accM4 = str(100 - (wrongPred / i) * 100)
+accH = str(accH[1] * 100)
+print('Accuracy host with:' + str(10000) + ' samples = ' + accH + '%')
+print('Accuracy target with:' + str(nrOfTestSamples) + ' samples = ' + accM4 + '%')
+
+
