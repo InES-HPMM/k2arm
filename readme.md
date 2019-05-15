@@ -3,8 +3,8 @@
 This repository contains the [k2arm software framework](https://github.engineering.zhaw.ch/hpmm/ki_forum_stuttgart/blob/master/ARM/host/k2arm.py), related code and the presentation from the "Forum Künstliche Intelligenz" talk in Stuttgart , 14.05.2019. 
 
 The [k2arm software framework](https://github.engineering.zhaw.ch/hpmm/ki_forum_stuttgart/blob/master/ARM/host/k2arm.py) can be used to translate a custom keras model into C-code.
-The generated c-code can, in combination with the [ARM-CMSIS-NN](http://www.keil.com/pack/doc/CMSIS_Dev/NN/html/index.html) functions, 
-be used to run neural-net calculations in an efficient way on an embedded microcontroller such as the CORTEX-M4. Those generated networks are compared to networks which are generated with the [x-Cube-AI](https://www.st.com/en/embedded-software/x-cube-ai.html) tool from ST.
+The generated C-code can, in combination with the [ARM-CMSIS-NN](http://www.keil.com/pack/doc/CMSIS_Dev/NN/html/index.html) functions, 
+be used to run neural-net calculations in an efficient way on an embedded microcontroller such as the Cortex-M4. Those generated networks are compared to networks which are generated with the [x-Cube-AI](https://www.st.com/en/embedded-software/x-cube-ai.html) tool from ST.
 
 Three different sized [MNIST classifiers](https://github.engineering.zhaw.ch/hpmm/ki_forum_stuttgart/blob/master/models/) are compared, the results are included in the [presentation](https://github.engineering.zhaw.ch/hpmm/ki_forum_stuttgart/blob/master/k2arm_final.pptx).
 
