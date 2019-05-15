@@ -24,7 +24,7 @@ Three different sized [MNIST classifiers](https://github.engineering.zhaw.ch/hpm
 
 3. Checkout the repository
 ```bash
-git clone git@github.engineering.zhaw.ch:hpmm/k2arm.git
+git clone https://github.com/InES-HPMM/k2arm.git
 ```
 
 4. Build stlink
