@@ -22,8 +22,10 @@ Three different sized [MNIST classifiers](https://github.engineering.zhaw.ch/hpm
    - [STM32F4-Discorevy Board](https://www.st.com/en/evaluation-tools/stm32f4discovery.html)
    - [TLL-232R Converter](https://ch.farnell.com/ftdi/ttl-232r-3v3/kabel-usb-ttl-pegel-seriell-umsetzung/dp/1329311?mckv=s89FAqCVd_dc|pcrid|251391972450|kword|ttl-232r-3v3|match|p|plid|&CMP=KNC-GCH-GEN-SKU-MDC-German&gclid=EAIaIQobChMIjfS4hcyo2wIVxDobCh14jwVBEAAYAiAAEgLMo_D_BwE)
 
-3. Checkout the repository with all submodules
-`git clone git@github.engineering.zhaw.ch:hpmm/k2arm.git`
+3. Checkout the repository
+```bash
+git clone git@github.engineering.zhaw.ch:hpmm/k2arm.git
+```
 
 4. Build stlink
 ```bash
