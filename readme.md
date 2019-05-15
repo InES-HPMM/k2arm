@@ -50,7 +50,7 @@ sudo ../../ST/stlink/build/Release/st-flash --format ihex write ./build/k2arm.he
 ```bash
 cd ../..
 ```
-5. open the file `eval.py` and adjust the settings serDev and modelPath
+5. Open the file `eval.py` and adjust the settings serDev and modelPath
 ```python
 serDev = '/dev/ttyUSB1'
 modelPath = 'models/modelMid/model.keras'
@@ -61,7 +61,7 @@ PA0-WKUP Board ------> TX Serial device host
 PA1      Board ------> RX Serial device host
 GND      Board ------> GND host
 ```
-7. Then run the evaluation script:
+7. Tun the evaluation script:
 ```bash
 python3 eval.py
 ```
@@ -103,7 +103,7 @@ PA0-WKUP Board ------> TX Serial device host
 PA1      Board ------> RX Serial device host
 GND      Board ------> GND host
 ```
-9. Then run the evaluation script
+9. Run the evaluation script
 ```bash
 python3 eval.py
 ```
