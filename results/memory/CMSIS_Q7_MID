@@ -1,0 +1,16 @@
+zingg@6089:~/ki_forum_stuttgart/ARM/target(master)$ sudo ../../ST/stlink/build/Release/st-flash --format ihex write ./build/cubeMx.hex
+[sudo] password for zingg: 
+st-flash 1.5.1
+2019-04-16T16:15:20 INFO common.c: Loading device parameters....
+2019-04-16T16:15:20 INFO common.c: Device connected is: F42x and F43x device, id 0x20016419
+2019-04-16T16:15:20 INFO common.c: SRAM size: 0x40000 bytes (256 KiB), Flash: 0x200000 bytes (2048 KiB) in pages of 16384 bytes
+2019-04-16T16:15:20 INFO common.c: Attempting to write 35376 (0x8a30) bytes to stm32 address: 134217728 (0x8000000)
+Flash page at addr: 0x08008000 erasedEraseFlash - Sector:0x2 Size:0x4000 
+2019-04-16T16:15:21 INFO common.c: Finished erasing 3 pages of 16384 (0x4000) bytes
+2019-04-16T16:15:21 INFO common.c: Starting Flash write for F2/F4/L4
+2019-04-16T16:15:21 INFO flash_loader.c: Successfully loaded flash loader in sram
+enabling 32-bit flash writes
+size: 32768
+size: 2608
+2019-04-16T16:15:22 INFO common.c: Starting verification of write complete
+2019-04-16T16:15:22 INFO common.c: Flash written and verified! jolly good!
