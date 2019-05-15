@@ -55,11 +55,17 @@ cd ../..
 serDev = '/dev/ttyUSB1'
 modelPath = 'models/modelMid/model.keras'
 ```
-6. Then run the evaluation script:
+6. Connect the serial device
+```
+PA0-WKUP Board ------> TX Serial device host
+PA1      Board ------> RX Serial device host
+GND      Board ------> GND host
+```
+7. Then run the evaluation script:
 ```bash
 python3 eval.py
 ```
-7. To measure the run-time of the neural net connect the GPIO `PIN0` of `GPIOB` to an oscilloscope 
+8. To measure the run-time of the neural net connect the GPIO `PIN0` of `GPIOB` to an oscilloscope 
 
 
 ## Reproduce X-Cube-AI Measurements
@@ -91,8 +97,14 @@ cd ..
 serDev = '/dev/ttyUSB1'
 modelPath = 'models/modelL/model.keras'
 ```
-8. Then run the evaluation script
+9. Connect the serial device
+```
+PA0-WKUP Board ------> TX Serial device host
+PA1      Board ------> RX Serial device host
+GND      Board ------> GND host
+```
+9. Then run the evaluation script
 ```bash
 python3 eval.py
 ```
-9. To measure the run-time of the neural net connect the GPIO `PIN0` of `GPIOB` to an oscilloscope 
+10. To measure the run-time of the neural net connect the GPIO `PIN0` of `GPIOB` to an oscilloscope 
