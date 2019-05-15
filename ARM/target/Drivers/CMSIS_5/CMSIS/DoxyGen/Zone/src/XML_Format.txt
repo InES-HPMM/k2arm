@@ -1,0 +1,1782 @@
+/*=======0=========1=========2=========3=========4=========5=========6=========7=========8=========9=========0=========1====*/
+/**
+\page zoneFormat Zone Description Format 
+
+The <b>Zone Description Format</b> provides a tool agnostic storage format that:
+
+- describes the resources available in a complete embedded system including device with one or more processors, external memory and/or external peripheral components.
+- specifies the resource partitions for various independent software projects (i.e. boot loader, user application, secure partition) that implement the application for the system.
+- specifies the functional segregation of a software project into "execution zones" for the setup of a Memory Protection Unit (MPU).
+
+
+\section XML_Format_Model Storage Data Model
+
+\todo this needs rework - I don't understand the need for diagrams - I believe we need examples instead
+
+In the following diagram the overall structure of the <b>Storage Data Model</b> is depicted.
+The \ref XML_Format_Schema "storage format" is derived from the model.
+
+\image html storagemodel.png "Storage Data Model Class Diagram"
+
+The storage model is developed based on the domain and can be seen as the domain model as well.
+Its main purpose is to capture all information about presumable embedded systems and microcontroller devices.
+
+\subsection XML_Format_Model_Decomp Embedded Microcontroller System Decomposition
+
+Todays available system-on-modules (SoM) and system-on-chips (SoC) already physically outlines the overall composition.
+It seems to be viable to stick with todays system structures. It's not likely that this structure will change drastically.
+
+A detailed view on the decomposition of an arbitrary SoM is given in the diagram below. 
+
+\image html som-decomposition.png "System-on-Module Decomposition"
+
+The SoM itself (System) can be seen as a composition of one or more SoCs (Device) combined with an arbitrary amount of
+board-level resources, i.e. off-chip memory (Memory) and peripheral (Peripheral). In turn each SoC is a composition of
+one or more processor elements (Processor, PE) with chip-level resources, i.e. on-chip memory and peripheral.
+
+Private memory and peripheral resources local to a dedicated PE has been simplified. These can also be seen as chip-level resources.
+
+The grouping (ResourceGroup) is intended to allow structural grouping of resources elements, i.e. by type or bus structure.
+
+\note The names (i.e. `name` attributes) are typically used as references and hence must be unique per class. Duplicate names are
+allowed if object hierarchies do not overlap. I.e. resources contained on two separate SoCs may have the same name but the name of
+a SoM level resource must not be reused on SoC level.
+
+\subsection XML_Format_Model_MemMap Microcontroller Memory Map Specification
+
+Most of the Multi-Core-SoCs available today show uniform memory maps. But in principle the logical memory address used
+to address a certain resource may vary between multiple PEs on the same SoC. Taking this into account leads to memory
+map specification on both SoC and PE level, see diagram below.
+
+\image html soc-memorymap.png "System-on-Chip Memory Map Specification"
+
+The memory maps specified on SoC and PE level are additive, i.e. the PEs actual memory map is the combination of both.
+This split allow the specification of uniform memory maps without duplication. Only the non-uniform parts need to be
+specified on PE level.
+
+Each resource can be mapped as often as needed, i.e. to reflect multiple memory aliases. By default the `name` attribute
+is used to identify the resource to be mapped. In order to map the same resource multiple times into a PEs memory space
+the `alias` attribute must be given to identify the resource instead. The mapping names must be unique per PE because they
+are used as references later.
+
+The attributes of the mapping are merged with those of the resource mapped. This allows the mapping of an individual PE
+to enhance the basic attributes of a resource. For example a memory resource that is basically readable/writeable/executable
+might be mapped to a PE as readonly memory.
+
+\subsection XML_Format_Model_Assign Zone Resource Assignments
+
+A system can be split into an arbitrary amount of project zones (PZone). And each PZone can be further split into execution
+zones (XZone). Resources used by an individual zone are represented using assignments (Assignment). Refer to the diagram
+below.
+
+\image html zone-assignment.png "Zone Resource Assignments"
+
+Each PZone is assigned to a dedicated PE which is selected to execute the resulting software part. The PE is referenced by
+the unique combination of `Dname` and `Pname` attributes. The XZones are contained in the PZone they belong to.
+
+Both PZones and XZones can have arbitrary assignments to available resources visible to the assigned PE. Assignments to
+SoC level resources not part of the SoC the PE is located on are illegal. Such assignments cannot be represented because
+the unique reference is built from `PZone::Dname` and `Assignment::name`.
+
+As a resource may be visible to the enclosing PE using multiple mappings the `as` attribute can be used to distinguish
+which alias is used for access. Selecting the correct alias is significant because of the effective access attributes
+resulting from merging `Resource.access`, `MemoryMapping.access`/`PeripheralMapping.access` and `Assignment.access`.
+
+Whilst peripheral resources can be assigned directly memory resources need to be split into blocks (MemoryBlock). A
+block can be seen as an arbitrary part of the physical memory. Individual blocks can be defined using modified
+access attributes, e.g. for having dedicated executable or readonly regions in RAM.
+
+\todo end todo
+
+
+\section XML_Format_Schema Overall XML structure
+
+The CMSIS-Zone utility uses two XML files to store system and configuration information. The structure these XML files
+is described with schema files that are located in the ARM.CMSIS pack in the directory .\\CMSIS\\Utilities.
+
+ File type  | Schema file   | Description
+:-----------|:--------------|:-------------
+*.szone     | szone.xsd     | Stores global system information and memory and peripheral configurations of all project zones
+*.xzone     | xzone.xsd     | Stores for a project the memory and peripheral configurations of all execution zones
+
+Top-level .szone XML elements
+=============================
+ - \subpage xml_szone_pg "<szone>" is the root element of *.szone file that provides global system information and memory and peripheral configurations of all project zones.
+ - \ref xml_device "<device>" describes the device that is part of the system. It may contain one or more processors.
+ - \ref xml_sresources "<resources>" describes the memory and peripheral resources of the system.
+ - \ref xml_szones "<zones>" defines the project zones along with the memory and peripheral assignments.
+ - \ref xml_configure "<configure>" controls the behaviour of the CMSIS-Zone utility.
+
+Structure of .szone XML file
+----------------------------
+
+\code
+<szone>                  // root element of system zone file
+
+  <device>               // device information
+    <package/>           // software pack that defines device
+    <processor/>         // processor information
+  </device>
+  
+  <resources>            // physical resources off-chip 
+    <memory>             // memory section  
+      <region>           // memory resource with (type="RAM" | "ROM")
+        <map/>           // optional map information (processor specific)
+        <block/>         // memory split information
+      </region>
+    </memory>
+    
+    <peripherals>        // peripheral resources off-chip
+      { <group> }        // peripheral group (optional)
+      <peripheral>
+         <map/>          // optional map information (processor specific)
+         <interrupt/>    // optional interrupts
+      </peripheral>
+      { </group> }       // peripheral group (optional)
+    </peripherals>
+  </resources>
+  
+  <zones>                // project zone assignments
+    <pzone>              // project zone name
+      <assign/>          // used peripheral, region, or block
+    </pzone>
+  </zones>
+  
+  <configure>            // CMSIS-Zone utility UI behavior
+</system>
+\endcode
+
+ 
+Top-level .xzone XML elements
+=============================
+ - \subpage xml_xzone_pg "<xzone>": root element of execution zone file that describes the processor and the resources (memory and peripherals) used by a software project. 
+ - \ref xml_device "<device>": describes the device that is used for this project.
+
+Structure of .xzone XML file
+----------------------------
+
+\code
+<xzone>                  // root element of execution zone file (refers .szone file with project zone information)
+  
+  <device>               // device information
+    <package/>           // software pack that defines device
+    <processor/>         // processor information
+  </device>
+
+  <resources>            // physical resources available for this project
+    <memory>             // memory section
+      <region>           // memory resource assigned at project zone level
+        <block/>         // logical memory splits of region at execution zone level
+      </region>
+    </memory>
+      
+    <peripherals>        // peripherals available for this project
+       { <group> }       // peripheral group (optional)
+       <peripheral/>
+       { </group> }      // peripheral group (optional)
+    </peripherals>
+  </resources>
+  
+  <zones>                // exection zone assignements
+    <xzone>              // execution zone name         
+      <assign/>          // used peripheral, region, or block
+      <mpu-setup>        // store MPU setup information (tbd)
+        <mpu desc="0" start=<addr> size=len  subregion=val />
+      </mpu-setup>
+    </xzone>
+  </zones>
+</xzone>
+\endcode
+*/
+
+
+/**************************************************************************************************/
+/**
+\page xml_szone_pg /szone element
+
+The \ref xml_szone_pg element is the root element of the .szone file which describes the global system information and the memory and peripheral configurations of all project zones.
+
+<table class="cmtable" summary="Element: szone">
+  <tr>
+    <th>Parent Element</th>
+    <th colspan="3">Element Chain</th>
+  </tr>
+  <tr>
+    <td>root</td>
+    <td colspan=3>Document root</td>
+  </tr>
+  <tr>
+    <th>Attributes</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Use</th>
+  </tr>
+  <tr>
+    <td>schemaVersion</td>
+    <td>CMSIS-Zone schema version used for describing the *.szone file.</td>
+    <td>VersionType</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>xmlns:xs</td>
+    <td>Is set to: \token{"http://www.w3.org/2001/XMLSchema-instance"} to indicate compliance to the XML format.</td>
+    <td>xs:decimal</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>xs:noNamespaceSchemaLocation</td>
+    <td>File name of the schema file. For example, \token{"szone.xsd"}.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <th>Child Elements</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Occurrence</th>
+  </tr>
+  <tr>
+    <td>\subpage xml_device "device"</td>
+    <td>Device that includes one or more PE. This section also describes the memory and peripherals that are integrated in this device.</td>
+    <td>DeviceType</td>
+    <td>1..1 </td>
+  </tr>
+  <tr>
+    <td>\subpage xml_sresources "resources"</td>
+    <td>Physical resources (memory and peripherals) that are available in the system.</td>
+    <td>SResourceType</td>
+    <td>1..1 </td>
+  </tr>
+  <tr>
+    <td>\subpage xml_szones "zones"</td>
+    <td>Project zone assignments of processor, memory, and peripheral resources</td>
+    <td>SZoneType</td>
+    <td>0..1 </td>
+  </tr>
+  <tr>
+    <td>\subpage xml_configure "configure"</td>
+    <td>Project zone assignments of processor, memory, and peripheral resources</td>
+    <td>SZoneType</td>
+    <td>0..1 </td>
+  </tr>
+</table>
+*/
+
+
+/**************************************************************************************************/
+/**
+\page xml_device /.../device element
+
+The \ref xml_device specifies the device of the system that integrates the processors.
+
+<table class="cmtable" summary="Element: device">
+  <tr>
+    <th>Parent Element</th>
+    <th colspan="3">Element Chain</th>
+  </tr>
+  <tr>
+    <td>\ref xml_szone_pg "szone"</td>
+    <td colspan=3>\ref xml_szone_pg</td>
+  </tr>
+  <tr>
+    <td>\ref xml_szone_pg "xzone"</td>
+    <td colspan=3>\ref xml_xzone_pg</td>
+  </tr>
+  <tr>
+    <th>Attributes</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Use</th>
+  </tr>
+  <tr>
+    <td>Dvendor</td>
+    <td>The devices vendor identifier.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>Dfamily</td>
+    <td>Name of the device family.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>DsubFamily</td>
+    <td>Name of the device sub family.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>Dname</td>
+    <td>Specifies the name of the device. Only alphabetical characters, decimal digits, '-' and '_' are allowed.</td>
+    <td>RestrictedString</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>Dvariant</td>
+    <td>Name of the device variant. Only alphabetical characters, decimal digits, '-' and '_' are allowed</td>
+    <td>RestrictedStringDname</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>info</td>
+    <td>Brief description of the device.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>  
+  <tr>
+    <th>Child Elements</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Occurrence</th>
+  </tr>
+  <tr>
+    <td>\ref xml_package "package"</td>
+    <td>Optional reference to the Software Pack this device is provided by.</td>
+    <td>complexType</td>
+    <td>0..1</td>
+  </tr>
+  <tr>
+    <td>\ref xml_processor "processor"</td>
+    <td>Processing elements and associated features embedded in the device.</td>
+    <td>complexType</td>
+    <td>1..*</td>
+  </tr>
+</table>
+
+
+\section xml_package /.../device/package element
+
+The \ref xml_package refers to the Software Pack that provides the Device Family Pack (DFP) for the \ref xml_device "device". 
+
+<table class="cmtable" summary="Element: package">
+  <tr>
+    <th>Parent Element</th>
+    <th colspan="3">Element Chain</th>
+  </tr>
+  <tr>
+    <td>\ref xml_device "device"</td>
+    <td colspan=3>\ref xml_device</td>
+  </tr>
+  <tr>
+    <th>Attributes</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Use</th>
+  </tr>
+  <tr>
+    <td>name</td>
+    <td>The unique pack name.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>url</td>
+    <td>The URL the pack can be obtained from.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>vendor</td>
+    <td>The pack vendor name.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>version</td>
+    <td>The pack version.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>info</td>
+    <td>Brief description of the Software Pack.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>    
+</table>
+
+
+\section xml_processor /.../device/processor element
+
+The \ref xml_processor defines the processing elements integrated in the \ref xml_device "device".
+The information in this element is identical with CMSIS-Pack, except that it provides an additional 'info' attribute.
+
+<table class="cmtable" summary="Element: processor">
+  <tr>
+    <th>Parent Element</th>
+    <th colspan="3">Element Chain</th>
+  </tr>
+  <tr>
+    <td>\ref xml_device "device"</td>
+    <td colspan=3>\ref xml_device</td>
+  </tr>
+  <tr>
+    <th>Attributes</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Use</th>
+  </tr>
+  <tr>
+    <td>Pname</td>
+    <td>Processor identifier. This attribute <b>is mandatory for devices that embed multiple processors</b>. 
+    </td>
+    <td>RestrictedString</td>
+    <td>required for all multi-core devices</td>
+  </tr>
+  <tr>
+    <td>Punits</td>
+    <td>Specifies the number of processor units in a symmetric multi-processor core (MPCore). Defaults to single-core CPU (\token{1}) when left empty.</td>
+    <td>InstancesType</td>
+    <td>required for all multi-core devices</td>
+  </tr>
+  <tr>
+    <td>Dcore</td>
+    <td>Specifies the processor core.</td>
+    <td>DcoreEnum</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>Dfpu</td>
+    <td>Specifies whether a hardware Floating Point Unit is present in the processor.</td>
+    <td>DfpuEnum</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>Dmpu</td>
+    <td>Specifies whether a Memory Protection Unit is present in the processor.</td>
+    <td>DmpuEnum</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>Dtz</td>
+    <td>Specifies whether an Armv8-M based device implements TrustZone.</td>
+    <td>DtzEnum</td>
+    <td>required for ARMv8-M based devices</td>
+  </tr>
+  <tr>
+    <td>Ddsp</td>
+    <td>Specifies whether a device supports the DSP instructions set.</td>
+    <td>DdspEnum</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>Dendian</td>
+    <td>Specifies the endianess of the processor.</td>
+    <td>DendianEnum</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>Dclock</td>
+    <td>Specifies the max clock frequency of the processor subsystem</td>
+    <td>xs:unsignedInt</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>DcoreVersion</td>
+    <td>Hardware revision of the processor core</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>info</td>
+    <td>Brief description of the processor.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>  
+</table>
+
+*/
+
+/*=======0=========1=========2=========3=========4=========5=========6=========7=========8=========9=========0=========1====*/
+/**
+\page xml_sresources /szone/resources element
+
+The \ref xml_sresources defines the memory and peripheral regions that are available in the system.
+
+<table class="cmtable" summary="Element: resources">
+  <tr>
+    <th>Parent Element</th>
+    <th colspan="3">Element Chain</th>
+  </tr>
+  <tr>
+    <td>\ref xml_szone_pg "szone"</td>
+    <td colspan=3>\ref xml_szone_pg</td>
+  </tr>
+  <tr>
+    <th>Child Elements</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Occurrence</th>
+  </tr>
+  <tr>
+    <td>\subpage xml_smemory "memory"</td>
+    <td>List of all physical memory region available in the system. It also defines memory partitions and restricts the availability to specific processors.</td>
+    <td>complexType</td>
+    <td>0..1</td>
+  </tr>
+  <tr>
+    <td>\subpage xml_speripherals "peripherals"</td>
+    <td>List of all peripherals available in the system.</td>
+    <td>complexType</td>
+    <td>0..1</td>
+  </tr>
+</table>
+
+*/
+
+/*=======0=========1=========2=========3=========4=========5=========6=========7=========8=========9=========0=========1====*/
+/**
+\page xml_smemory /szone/resources/memory element
+
+The \ref xml_smemory contains a list of all physical memory region available in the system. It also defines memory partitions and restricts the availability to specific processors.
+
+<b>Example</b>
+\code
+<resources>
+  <memory>
+    <region name="SRAM" type="RAM" start="0x10000000" size="0x80000" access="rwx" info="Internal SRAM (512KB)"/>
+    :
+  </memory>
+  :
+</resources>
+\endcode
+
+
+<table class="cmtable" summary="Element: memory">
+  <tr>
+    <th>Parent Element</th>
+    <th colspan="3">Element Chain</th>
+  </tr>
+  <tr>
+    <td>\ref xml_sresources "resources"</td>
+    <td colspan=3>\ref xml_sresources</td>
+  </tr>
+  <tr>
+    <th>Child Elements</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Occurrence</th>
+  </tr>
+  <tr>
+    <td>\ref xml_sregion "region"</td>
+    <td>Lists a physical memory region, defines logical memory partitions and alternative mappings to processors.</td>
+    <td>complexType</td>
+    <td>0..1</td>
+  </tr>
+</table>
+
+\section xml_sregion /szone/resources/memory/region element
+
+The \ref xml_sregion lists a physical memory region, defines logical memory partitions and alternative mappings to processors.
+
+<table class="cmtable" summary="Element: region">
+  <tr>
+    <th>Parent Element</th>
+    <th colspan="3">Element Chain</th>
+  </tr>
+  <tr>
+    <td>\ref xml_smemory "memory"</td>
+    <td colspan=3>\ref xml_smemory</td>
+  </tr>
+  <tr>
+    <th>Attributes</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Use</th>
+  </tr>
+  <tr>
+    <td>name</td>
+    <td>The name of this memory region which must be unique in this *.szone file.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>type</td>
+    <td>The physical type of memory in this region ("RAM" or "ROM").</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>start</td>
+    <td>The physical start address of the memory region in the address map.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>size</td>
+    <td>The physical size of the memory region in bytes.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>access</td>
+    <td>Access permissions for this memory region.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>startup</td>
+    <td>"1" specifies that this region is used for the startup code of the application. Default value is "0".</td>
+    <td>xs:boolean</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>external</td>
+    <td>"1" specifies that this region is provided by an external component that is not part of the device. Default value is "0".</td>
+    <td>xs:boolean</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>Pname</td>
+    <td>The processor that has access to this memory region. If omitted all processors of the system have access to that region. \
+	    Alternative processors or alias regions are defined with the \<map> element.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>info</td>
+    <td>Brief description of the memory region.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>  
+  <tr>
+    <th>Child Elements</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Occurrence</th>
+  </tr>
+  <tr>
+    <td>\ref xml_smap "map"</td>
+    <td>optional map information that can be processor specific or a alias memory address</td>
+    <td>complexType</td>
+    <td>0..1</td>
+  </tr>
+  <tr>
+    <td>\ref xml_sblock "block"</td>
+    <td>List of logical memory blocks that are user defined.</td>
+    <td>complexType</td>
+    <td>0..n</td>
+  </tr>
+</table>
+
+
+\section xml_smap /szone/resources/memory/region/map element
+
+The \ref xml_smap contains additional information for alias regions or processors that have access to this memory region.
+
+<table class="cmtable" summary="Element: map">
+  <tr>
+    <th>Parent Element</th>
+    <th colspan="3">Element Chain</th>
+  </tr>
+  <tr>
+    <td>\ref xml_sregion "region"</td>
+    <td colspan=3>\ref xml_sregion</td>
+  </tr>
+  <tr>
+    <th>Attributes</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Use</th>
+  </tr>
+  <tr>
+    <td>name</td>
+    <td>Alternative name of this memory region (in case of alias) which must be unique in this *.szone file.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>start</td>
+    <td>The alias start address of the memory region in the address map.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>Pname</td>
+    <td>The processor that has access to this memory region. If omitted all processors of the system have access to that region.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>access</td>
+    <td>Access permissions for this alternative mapping.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>info</td>
+    <td>Brief description of the memory region.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>  
+</table>
+
+
+\section xml_sblock /szone/resources/memory/region/block element
+
+The \ref xml_sblock defines a logical memory block in that region.
+
+<table class="cmtable" summary="Element: block">
+  <tr>
+    <th>Parent Element</th>
+    <th colspan="3">Element Chain</th>
+  </tr>
+  <tr>
+    <td>\ref xml_sregion "region"</td>
+    <td colspan=3>\ref xml_sregion</td>
+  </tr>
+  <tr>
+    <th>Attributes</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Use</th>
+  </tr>
+  <tr>
+    <td>name</td>
+    <td>The name this memory block can be referenced by. Must be unique within this region.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>size</td>
+    <td>The physical memory size this block allocates.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>offset</td>
+    <td>The logical memory offset of this block in the region.  If fixed="1" the memory block cannot be re-ordered within the region.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>access</td>
+    <td>Access permissions for this memory block.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>startup</td>
+    <td>"1" specifies that this region is used for the startup code of the application. Default value is "0".</td>
+    <td>xs:boolean</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>fixed</td>
+    <td>"1" indicates a fixed offset within that region. "0" (default) allows to re-arrange the block within the region.</td>
+    <td>xs:boolean</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>info</td>
+    <td>Brief description of the memory block.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>  
+</table>
+
+*/
+
+/*=======0=========1=========2=========3=========4=========5=========6=========7=========8=========9=========0=========1====*/
+/**
+\page xml_speripherals /szone/resources/peripherals element
+
+The \ref xml_speripherals contains a list of all peripherals available in the system. It also restricts the availability to specific processors.
+
+<b>Example</b>
+\code
+<resources>
+  :
+  <peripherals>
+    <peripheral name="ADC0" start="0x40080000" size="0x1000" access="rwp" info="Analog/Digital Converter 0 (12-bit)"/>
+    :
+    <group name="USART" info="Universal synchronous/asynchronous receiver/transmitter">
+      <peripheral name="UART0"  start="0x40001000" size="0x1000" access="rwp" info="Universal asynchronous receiver/transmitter 0"/>
+      <peripheral name="USART1" start="0x40002000" size="0x1000" access="rwp" info="Universal synchronous/asynchronous receiver/transmitter 1"/>
+      :
+    </group>
+  </peripherals>
+</resources>
+\endcode
+&nbsp;
+
+<table class="cmtable" summary="Element: peripherals">
+  <tr>
+    <th>Parent Element</th>
+    <th colspan="3">Element Chain</th>
+  </tr>
+  <tr>
+    <td>\ref xml_sresources "resources"</td>
+    <td colspan=3>\ref xml_sresources</td>
+  </tr>
+  <tr>
+    <th>Child Elements</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Occurrence</th>
+  </tr>
+  <tr>
+    <td>\ref xml_sgroup "group"</td>
+    <td>Logical grouping of peripherals.</td>
+    <td>complexType</td>
+    <td>0..*</td>
+  </tr>
+  <tr>
+    <td>\ref xml_speripheral "peripheral"</td>
+    <td>Peripheral definitions.</td>
+    <td>complexType</td>
+    <td>0..*</td>
+  </tr>
+</table>
+
+\section xml_sgroup /szone/resources/peripherals/group element
+
+The \ref xml_sgroup can be used to logically group peripherals according to functionality or bus topology.
+
+<table class="cmtable" summary="Element: group">
+  <tr>
+    <th>Parent Element</th>
+    <th colspan="3">Element Chain</th>
+  </tr>
+  <tr>
+    <td>\ref xml_speripherals "peripherals"</td>
+    <td colspan=3>\ref xml_speripherals</td>
+  </tr>
+  <tr>
+    <th>Attributes</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Use</th>
+  </tr>
+  <tr>
+    <td>name</td>
+    <td>The name for the peripheral group.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>info</td>
+    <td>Brief description of the peripheral group.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>  
+  <tr>
+    <th>Child Elements</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Occurrence</th>
+  </tr>
+  <tr>
+    <td>\ref xml_speripheral "peripheral"</td>
+    <td>Peripheral definitions.</td>
+    <td>complexType</td>
+    <td>0..*</td>
+  </tr>
+</table>
+
+\section xml_speripheral /szone/resources/peripherals/.../peripheral element
+
+The \ref xml_speripheral is used to define an address mapping for one peripheral.
+
+<table class="cmtable" summary="Element: peripheral">
+  <tr>
+    <th>Parent Element</th>
+    <th colspan="3">Element Chain</th>
+  </tr>
+  <tr>
+    <td>\ref xml_speripherals "peripherals"</td>
+    <td colspan=3>\ref xml_speripherals</td>
+  </tr>
+  <tr>
+    <td>\ref xml_sgroup "group"</td>
+    <td colspan=3>\ref xml_sgroup</td>
+  </tr>
+  <tr>
+    <th>Attributes</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Use</th>
+  </tr>
+  <tr>
+    <td>name</td>
+    <td>The name this address mapping can be referenced by. Must be unique within a single processors memory map.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>start</td>
+    <td>The physical start address of the peripheral in the address map.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>size</td>
+    <td>The physical size of the memory region in bytes.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>external</td>
+    <td>"1" specifies that this peripheral is provided by an external component that is not part of the device. Default value is "0".</td>
+    <td>xs:boolean</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>Pname</td>
+    <td>The processor that has access to this memory region. If omitted all processors of the system have access to that region.
+	    Alternative processors or alias regions are defined with the \<map> element.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>access</td>
+    <td>Access permissions for this peripheral.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>info</td>
+    <td>Brief description of the peripheral mapping.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>  
+  <tr>
+    <th>Child Elements</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Occurrence</th>
+  </tr>
+  <tr>
+    <td>\ref xml_smap "map"</td>
+    <td>optional map information that can be processor specific or a alias memory address</td>
+    <td>complexType</td>
+    <td>0..1</td>
+  </tr>
+  <tr>
+    <td>interrupts????</td>
+    <td>RK suggest to add this later</td>
+    <td>complexType</td>
+    <td>0..1</td>
+  </tr>
+</table>
+
+*/
+
+
+/*=======0=========1=========2=========3=========4=========5=========6=========7=========8=========9=========0=========1====*/
+/**
+\page xml_szones /szone/zones element
+
+The \ref xml_szones contains all project zone definitions for this system.
+
+<b>Example</b>
+\code
+<zones>
+  <pzone name="App" Pname="Cortex-M4">
+    <assign region="RAM1" block="Network"        access="rwu"/>
+    <assign group="UART" peripheral="USART0"     access="rw" />
+    :
+  </pzone>
+  :
+</zones>
+\endcode
+&nbsp;
+
+<table class="cmtable" summary="Element: zones">
+  <tr>
+    <th>Parent Element</th>
+    <th colspan="3">Element Chain</th>
+  </tr>
+  <tr>
+    <td>\ref xml_szone_pg "szone"</td>
+    <td colspan=3>\ref xml_szone_pg</td>
+  </tr>
+  <tr>
+    <th>Child Elements</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Occurrence</th>
+  </tr>
+  <tr>
+    <td>\subpage xml_pzone</td>
+    <td>Project zone definitions</td>
+    <td>complexType</td>
+    <td>0..*</td>
+  </tr>
+</table>
+
+\section xml_pzone /szone/zones/pzone element
+
+The \ref xml_pzone defines a single project zone.
+
+<table class="cmtable" summary="Element: pzone">
+  <tr>
+    <th>Parent Element</th>
+    <th colspan="3">Element Chain</th>
+  </tr>
+  <tr>
+    <td>\ref xml_szones "zones"</td>
+    <td colspan=3>\ref xml_szones</td>
+  </tr>
+  <tr>
+    <th>Attributes</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Use</th>
+  </tr>
+  <tr>
+    <td>name</td>
+    <td>The unique name for this project zone.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>Pname</td>
+    <td>The name of the processor (on the device) this project is assigned to.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>info</td>
+    <td>Brief description of the project zone.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <th>Child Elements</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Occurrence</th>
+  </tr>
+  <tr>
+    <td>\ref xml_sassign</td>
+    <td>Resource Assignments</td>
+    <td>complexType</td>
+    <td>0..*</td>
+  </tr>
+</table>
+
+
+\section xml_sassign /szone/zones/pzone/assign element
+
+The \ref xml_sassign defines the resource assignments of that project zone.
+
+<table class="cmtable" summary="Element: assign">
+  <tr>
+    <th>Parent Element</th>
+    <th colspan="3">Element Chain</th>
+  </tr>
+  <tr>
+    <td>\ref xml_pzone "pzone"</td>
+    <td colspan=3>\ref xml_pzone</td>
+  </tr>
+  <tr>
+    <th>Attributes</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Use</th>
+  </tr>
+  <tr>
+    <td>region</td>
+    <td>Name of a memory region.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>block</td>
+    <td>Name of a memory block.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>group</td>
+    <td>Name of a peripheral group.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>peripheral</td>
+    <td>Name of a peripheral.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>
+</table>
+
+*/
+
+/**************************************************************************************************/
+/**
+\page xml_configure /szone/configure element
+
+The \ref xml_configure allows to control the operation of the CMSIS-Zone utility.
+
+<b>Example</b>
+\code
+<configure>            // CMSIS-Zone utility UI behavior
+  <type name="RAM"        phide="0" xhide="0" pselect="0" xselect="0" />
+  <type name="ROM"        phide="0" xhide="1" pselect="0" xselect="1" />
+  <type name="Peripheral" phide="1" xhide="0" pselect="1" xselect="0" />
+</configure>
+\endcode
+&nbsp;
+
+<table class="cmtable" summary="Element: configure">
+  <tr>
+    <th>Parent Element</th>
+    <th colspan="3">Element Chain</th>
+  </tr>
+  <tr>
+    <td>\ref xml_szone_pg "szone"</td>
+    <td colspan=3>\ref xml_szone_pg</td>
+  </tr>
+  <tr>
+    <th>Child Elements</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Occurrence</th>
+  </tr>
+  <tr>
+    <td>\ref xml_ctype "type"</td>
+    <td>UI behaviour for a memory or peripheral type</td>
+    <td>complexType</td>
+    <td>0..*</td>
+  </tr>
+</table>
+
+
+\section xml_ctype /szone/configure/type element
+
+The \ref xml_ctype defines UI behaviour of the CMSIS-Zone utility for a specific memory or peripheral type.
+
+<table class="cmtable" summary="Element: type">
+  <tr>
+    <th>Parent Element</th>
+    <th colspan="3">Element Chain</th>
+  </tr>
+  <tr>
+    <td>\ref xml_configure "configure"</td>
+    <td colspan=3>\ref xml_configure</td>
+  </tr>
+  <tr>
+    <th>Attributes</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Use</th>
+  </tr>
+  <tr>
+    <td>name</td>
+    <td>Refers item type ("RAM", "ROM", or "Peripheral") that this element specifies.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>phide</td>
+    <td>"1" specifies that the item type is hidden during project zone configuration in the UI of the CMSIS-Zone utility (default is "0").</td>
+    <td>xs:boolean</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>xhide</td>
+    <td>"1" specifies that the item type is hidden during execution zone configuration in the UI of the CMSIS-Zone utility (default is "0").</td>
+    <td>xs:boolean</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>pselect</td>
+    <td>"1" specifies that all resources with the item type are selected for project zone configuration (default is "0").</td>
+    <td>xs:boolean</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>xselect</td>
+    <td>"1" specifies that all resources with the item type are selected for execution zone configuration (default is "0").</td>
+    <td>xs:boolean</td>
+    <td>optional</td>
+  </tr>
+</table>
+
+
+*/
+
+
+/**************************************************************************************************/
+/**
+\page xml_xzone_pg /xzone element
+
+The \ref xml_xzone_pg element is the root element of the .xzone file which stores for a project the memory and peripheral configurations of all execution zones.
+
+
+<table class="cmtable" summary="Root Element: xzone">
+  <tr>
+    <th>Parent Element</th>
+    <th colspan="3">Element Chain</th>
+  </tr>
+  <tr>
+    <td>root</td>
+    <td colspan=3>Document root</td>
+  </tr>
+  <tr>
+    <th>Attributes</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Use</th>
+  </tr>
+  <tr>
+    <td>schemaVersion</td>
+    <td>CMSIS-Zone schema version used for describing the xzone file.</td>
+    <td>VersionType</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>xmlns:xs</td>
+    <td>Is set to: \token{"http://www.w3.org/2001/XMLSchema-instance"} to indicate compliance to the XML format.</td>
+    <td>xs:decimal</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>xs:noNamespaceSchemaLocation</td>
+    <td>File name of the schema file. For example, \token{"xzone.xsd"}.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <th>Child Elements</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Occurrence</th>
+  </tr>
+  <tr>
+    <td>\subpage xml_device "device"</td>
+    <td>Device that includes one or more PE. This section also describes the memory and peripherals that are integrated in this device.</td>
+    <td>DeviceType</td>
+    <td>1..1 </td>
+  </tr>
+  <tr>
+    <td>\subpage xml_xresources "resources"</td>
+    <td>Physical resources (memory and peripherals) that are available in this project.</td>
+    <td>XResourceType</td>
+    <td>1..1 </td>
+  </tr>
+  <tr>
+    <td>\subpage xml_xzones "zones"</td>
+    <td>Execution zone assignments of processor, memory, and peripheral resources</td>
+    <td>XZoneType</td>
+    <td>0..1 </td>
+  </tr>
+</table>
+*/
+
+/*=======0=========1=========2=========3=========4=========5=========6=========7=========8=========9=========0=========1====*/
+/**
+\page xml_xresources /xzone/resources element
+
+The \ref xml_xresources defines the memory and peripheral regions that are available in the system.
+
+<table class="cmtable" summary="Element: resources">
+  <tr>
+    <th>Parent Element</th>
+    <th colspan="3">Element Chain</th>
+  </tr>
+  <tr>
+    <td>\ref xml_xzone_pg "xzone"</td>
+    <td colspan=3>\ref xml_xzone_pg</td>
+  </tr>
+  <tr>
+    <th>Child Elements</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Occurrence</th>
+  </tr>
+  <tr>
+    <td>\subpage xml_xmemory "memory"</td>
+    <td>List of all physical memory regions available for this project.</td>
+    <td>complexType</td>
+    <td>0..1</td>
+  </tr>
+  <tr>
+    <td>\subpage xml_xperipherals "peripherals"</td>
+    <td>List of all peripherals available for this project.</td>
+    <td>complexType</td>
+    <td>0..1</td>
+  </tr>
+</table>
+
+*/
+
+/*=======0=========1=========2=========3=========4=========5=========6=========7=========8=========9=========0=========1====*/
+/**
+\page xml_xmemory /xzone/resources/memory element
+
+The \ref xml_xmemory contains a list of all physical memory regions available for this project.
+
+<b>Example</b>
+\code
+<resources>
+  <memory>
+    <region name="SRAM_1" type="RAM" start="0x10000000" size="0x8000" access="rwx" info="Memory for Application 1"/>
+    :
+  </memory>
+  :
+</resources>
+\endcode
+
+
+<table class="cmtable" summary="Element: memory">
+  <tr>
+    <th>Parent Element</th>
+    <th colspan="3">Element Chain</th>
+  </tr>
+  <tr>
+    <td>\ref xml_xresources "resources"</td>
+    <td colspan=3>\ref xml_xresources</td>
+  </tr>
+  <tr>
+    <th>Child Elements</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Occurrence</th>
+  </tr>
+  <tr>
+    <td>\ref xml_xregion "region"</td>
+    <td>Lists a physical memory region and defines logical memory partitions.</td>
+    <td>complexType</td>
+    <td>0..1</td>
+  </tr>
+</table>
+
+\section xml_xregion /xzone/resources/memory/region element
+
+The \ref xml_xregion lists a physical memory region and defines logical memory partitions.
+
+<table class="cmtable" summary="Element: region">
+  <tr>
+    <th>Parent Element</th>
+    <th colspan="3">Element Chain</th>
+  </tr>
+  <tr>
+    <td>\ref xml_xmemory "memory"</td>
+    <td colspan=3>\ref xml_xmemory</td>
+  </tr>
+  <tr>
+    <th>Attributes</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Use</th>
+  </tr>
+  <tr>
+    <td>name</td>
+    <td>The name of this memory region which must be unique in this *.xzone file.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>type</td>
+    <td>The type of memory in this region ("RAM" or "ROM").</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>start</td>
+    <td>The physical start address of the memory region in the address map.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>size</td>
+    <td>The physical size of the memory region in bytes.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>access</td>
+    <td>Access permissions for this alternative mapping.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>startup</td>
+    <td>"1" specifies that this region is used for the startup code of the application. Default value is "0".</td>
+    <td>xs:boolean</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>external</td>
+    <td>"1" specifies that this region is provided by an external component that is not part of the device. Default value is "0".</td>
+    <td>xs:boolean</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>info</td>
+    <td>Brief description of the memory region.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>  
+  <tr>
+    <th>Child Elements</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Occurrence</th>
+  </tr>
+  <tr>
+    <td>\ref xml_xblock "block"</td>
+    <td>List of logical memory blocks that are user defined.</td>
+    <td>complexType</td>
+    <td>0..n</td>
+  </tr>
+</table>
+
+\section xml_xblock /xzone/resources/memory/region/block element
+
+The \ref xml_xblock defines a logical memory block in that region.
+
+<table class="cmtable" summary="Element: block">
+  <tr>
+    <th>Parent Element</th>
+    <th colspan="3">Element Chain</th>
+  </tr>
+  <tr>
+    <td>\ref xml_xregion "region"</td>
+    <td colspan=3>\ref xml_xregion</td>
+  </tr>
+  <tr>
+    <th>Attributes</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Use</th>
+  </tr>
+  <tr>
+    <td>name</td>
+    <td>The name this memory block can be referenced by. Must be unique within this region.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>size</td>
+    <td>The physical memory size this block allocates.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>offset</td>
+    <td>The logical memory offset of this block in the region.  If fixed="1" the memory block cannot be re-ordered within the region.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>access</td>
+    <td>Access permissions for this memory block.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>startup</td>
+    <td>"1" specifies that this region is used for the startup code of the application. Default value is "0".</td>
+    <td>xs:boolean</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>fixed</td>
+    <td>"1" indicates a fixed offset within that region. "0" (default) allows to re-arrange the block within the region.</td>
+    <td>xs:boolean</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>info</td>
+    <td>Brief description of the memory block.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>  
+</table>
+
+*/
+
+/*=======0=========1=========2=========3=========4=========5=========6=========7=========8=========9=========0=========1====*/
+/**
+\page xml_xperipherals /xzone/resources/peripherals element
+
+The \ref xml_xperipherals contains a list of all peripherals available in this project.
+
+<table class="cmtable" summary="Element: peripherals">
+  <tr>
+    <th>Parent Element</th>
+    <th colspan="3">Element Chain</th>
+  </tr>
+  <tr>
+    <td>\ref xml_xresources "resources"</td>
+    <td colspan=3>\ref xml_xresources</td>
+  </tr>
+  <tr>
+    <th>Child Elements</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Occurrence</th>
+  </tr>
+  <tr>
+    <td>\ref xml_xgroup "group"</td>
+    <td>Logical grouping of peripherals.</td>
+    <td>complexType</td>
+    <td>0..*</td>
+  </tr>
+  <tr>
+    <td>\ref xml_xperipheral "peripheral"</td>
+    <td>Peripheral definitions.</td>
+    <td>complexType</td>
+    <td>0..*</td>
+  </tr>
+</table>
+
+\section xml_xgroup /xzone/resources/peripherals/group element
+
+The \ref xml_xgroup can be used to logically group peripherals according to functionality or bus topology.
+
+<table class="cmtable" summary="Element: group">
+  <tr>
+    <th>Parent Element</th>
+    <th colspan="3">Element Chain</th>
+  </tr>
+  <tr>
+    <td>\ref xml_xperipherals "peripherals"</td>
+    <td colspan=3>\ref xml_xperipherals</td>
+  </tr>
+  <tr>
+    <th>Attributes</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Use</th>
+  </tr>
+  <tr>
+    <td>name</td>
+    <td>The name for the peripheral group.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>info</td>
+    <td>Brief description of the peripheral group.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>  
+  <tr>
+    <th>Child Elements</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Occurrence</th>
+  </tr>
+  <tr>
+    <td>\ref xml_xperipheral "peripheral"</td>
+    <td>Peripheral definitions.</td>
+    <td>complexType</td>
+    <td>0..*</td>
+  </tr>
+</table>
+
+\section xml_xperipheral /xzone/resources/peripherals/.../peripheral element
+
+The \ref xml_xperipheral is used to define an address mapping for one peripheral.
+
+<table class="cmtable" summary="Element: peripheral">
+  <tr>
+    <th>Parent Element</th>
+    <th colspan="3">Element Chain</th>
+  </tr>
+  <tr>
+    <td>\ref xml_xperipherals "peripherals"</td>
+    <td colspan=3>\ref xml_xperipherals</td>
+  </tr>
+  <tr>
+    <td>\ref xml_xgroup "group"</td>
+    <td colspan=3>\ref xml_xgroup</td>
+  </tr>
+  <tr>
+    <th>Attributes</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Use</th>
+  </tr>
+  <tr>
+    <td>name</td>
+    <td>The name this address mapping can be referenced by. Must be unique within a single processors memory map.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>start</td>
+    <td>The physical start address of the peripheral in the address map.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>size</td>
+    <td>The physical size of the memory region in bytes.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>external</td>
+    <td>"1" specifies that this peripheral is provided by an external component that is not part of the device. Default value is "0".</td>
+    <td>xs:boolean</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>access</td>
+    <td>Access permissions for this peripheral.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>info</td>
+    <td>Brief description of the peripheral mapping.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>  
+  <tr>
+    <th>Child Elements</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Occurrence</th>
+  </tr>
+  <tr>
+    <td>interrupts????</td>
+    <td>RK suggest to add this later</td>
+    <td>complexType</td>
+    <td>0..1</td>
+  </tr>
+</table>
+
+*/
+
+/*=======0=========1=========2=========3=========4=========5=========6=========7=========8=========9=========0=========1====*/
+/**
+\page xml_xzones /xzone/zones element
+
+The \ref xml_xzones contains all execution zone definitions for this project.
+
+<b>Example</b>
+\code
+<zones>
+  <xzone name="Network">
+    <assign region="RAM1" block="Network"        access="rwu"/>
+    <assign group="UART" peripheral="USART0"     access="rw" />
+    :
+  </xzone>
+  :
+</zones>
+\endcode
+&nbsp;
+
+<table class="cmtable" summary="Element: zones">
+  <tr>
+    <th>Parent Element</th>
+    <th colspan="3">Element Chain</th>
+  </tr>
+  <tr>
+    <td>\ref xml_xzone_pg "xzone"</td>
+    <td colspan=3>\ref xml_xzone_pg</td>
+  </tr>
+  <tr>
+    <th>Child Elements</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Occurrence</th>
+  </tr>
+  <tr>
+    <td>\subpage xml_xzone</td>
+    <td>Execution zone definitions</td>
+    <td>complexType</td>
+    <td>0..*</td>
+  </tr>
+</table>
+
+\section xml_xzone /xzone/zones/xzone element
+
+The \ref xml_pzone defines a single project zone.
+
+<table class="cmtable" summary="Element: xzone">
+  <tr>
+    <th>Parent Element</th>
+    <th colspan="3">Element Chain</th>
+  </tr>
+  <tr>
+    <td>\ref xml_xzones "zones"</td>
+    <td colspan=3>\ref xml_xzones</td>
+  </tr>
+  <tr>
+    <th>Attributes</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Use</th>
+  </tr>
+  <tr>
+    <td>name</td>
+    <td>The unique name for this execution zone.</td>
+    <td>xs:string</td>
+    <td>required</td>
+  </tr>
+  <tr>
+    <td>info</td>
+    <td>Brief description of the execution zone.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <th>Child Elements</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Occurrence</th>
+  </tr>
+  <tr>
+    <td>\ref xml_xassign</td>
+    <td>Resource Assignments</td>
+    <td>complexType</td>
+    <td>0..*</td>
+  </tr>
+</table>
+
+
+\section xml_xassign /xzone/zones/xzone/assign element
+
+The \ref xml_xassign defines the resource assignments of that execution zone.
+
+<table class="cmtable" summary="Element: assign">
+  <tr>
+    <th>Parent Element</th>
+    <th colspan="3">Element Chain</th>
+  </tr>
+  <tr>
+    <td>\ref xml_xzone "xzone"</td>
+    <td colspan=3>\ref xml_xzone</td>
+  </tr>
+  <tr>
+    <th>Attributes</th>
+    <th>Description</th>
+    <th>Type</th>
+    <th>Use</th>
+  </tr>
+  <tr>
+    <td>region</td>
+    <td>Name of a memory region.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>block</td>
+    <td>Name of a memory block.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>group</td>
+    <td>Name of a peripheral group.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>
+  <tr>
+    <td>peripheral</td>
+    <td>Name of a peripheral.</td>
+    <td>xs:string</td>
+    <td>optional</td>
+  </tr>
+</table>
+
+*/
