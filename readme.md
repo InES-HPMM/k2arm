@@ -16,7 +16,7 @@ Three different sized [MNIST classifiers](https://github.engineering.zhaw.ch/hpm
    - keras version 2.2.4 
    - [STM32CubeMX](https://www.st.com/en/development-tools/stm32cubemx.html)
    - [X-Cube-AI](https://www.st.com/en/embedded-software/x-cube-ai.html)
-   - arm-none-eabi-gcc (15:6.3.1+svn253039-1build1) 6.3.1 20170620
+   - arm-none-eabi-gcc 6.3.1 
 
 2. Follwoing hardware is required:
    - [STM32F4-Discorevy Board](https://www.st.com/en/evaluation-tools/stm32f4discovery.html)
